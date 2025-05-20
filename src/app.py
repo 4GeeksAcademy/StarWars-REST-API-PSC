@@ -2,13 +2,13 @@
 This module takes care of starting the API Server, Loading the DB and Adding the endpoints
 """
 import os
-from flask import Flask, request, jsonify, url_for
+from flask import Flask, request, jsonify, url_for, abort
 from flask_migrate import Migrate
 from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
-from models import db, User
+from models import db, User, People, Planet, Fav_Planet, Fav_People
 #from models import Person
 
 app = Flask(__name__)
@@ -38,12 +38,199 @@ def sitemap():
 
 @app.route('/user', methods=['GET'])
 def handle_hello():
+    users = User.query.all()
+    result = []
+    for user in users: result.append({
+    'id': user.id,
+    'email': user.email
+    })
+    return jsonify(result)
 
-    response_body = {
-        "msg": "Hello, this is your GET /user response "
-    }
+@app.route('/people', methods=['GET'])
+def handle_people():
+    peoples = People.query.all()    
+    result = list(map(lambda user:user.serialize(),peoples))
+    return jsonify(result)
 
-    return jsonify(response_body), 200
+
+@app.route('/favorite', methods=['GET'])
+def get_fav():
+    peoples = Fav_People.query.all()    
+    result = list(map(lambda user:user.serialize(),peoples))
+    return jsonify(result)
+
+@app.route('/planet', methods=['GET'])
+def handle_planet():
+    planets = Planet.query.all()
+    result = []
+    for plant in planets: result.append({
+    'planet_id': plant.planet_id,
+    'name_planet': plant.name_planet,
+    'population': plant.population,
+    'climate': plant.climate,
+    })
+    return jsonify(result)
+
+@app.route('/user', methods=['POST'])
+def create_new_user():
+    new = User(
+        email= request.json['email'],
+        password = request.json['password'],
+        is_active= request.json['is_active'],
+    )
+    db.session.add(new)
+    db.session.commit()
+    return jsonify(new.serialize()), 200
+
+
+@app.route('/people', methods=['POST'])
+def create_new_people():
+    new = People(
+        name_people = request.json['name_people'],
+        age= request.json['age'],
+        born_date= request.json['born_date'],
+    )
+    db.session.add(new)
+    db.session.commit()
+    return jsonify(new.serialize()), 200
+
+@app.route('/prueba', methods=['GET'])
+def probando():
+    return 'Hola Mundo'
+
+@app.route('/planet', methods=['POST'])
+def create_new_planet():
+    new = Planet(
+        name_planet = request.json['name_planet'],
+        population= request.json['population'],
+        climate= request.json['climate'],
+    )
+    db.session.add(new)
+    db.session.commit()
+    return jsonify(new.serialize()), 200
+
+@app.route('/user/<string:user_id>', methods=['PUT'])
+def edit_user(user_id):
+    editUser = User.query.get(user_id)
+    if editUser is None:
+        abort(404)
+    editUser.email = request.json['email']
+    db.session.commit()
+
+    return (jsonify(editUser.serialize()))
+
+@app.route('/people/<string:people_id>', methods=['PUT'])
+def edit_people(people_id):
+    editPeople = People.query.get(people_id)
+    if editPeople is None:
+        abort(404)
+    editPeople.name_people = request.json['name_people']
+    editPeople.age = request.json['age']
+    editPeople.born_date = request.json['born_date']
+    db.session.commit()
+
+    return (jsonify(editPeople.serialize()))
+
+@app.route('/planet/<string:planet_id>', methods=['PUT'])
+def edit_planet(planet_id):
+    editPlanet = Planet.query.get(planet_id)
+    if editPlanet is None:
+        abort(404)
+    editPlanet.name_planet = request.json['name_planet']
+    editPlanet.population = request.json['population']
+    editPlanet.climate = request.json['climate']
+
+    db.session.commit()
+
+    return (jsonify(editPlanet.serialize()))
+    
+@app.route('/people/<string:people_id>', methods=['GET'])
+def get_people(people_id):
+    peopl = People.query.get(people_id)
+    if peopl is None:
+        abort(404)
+    return jsonify(peopl.serialize())
+
+@app.route('/planet/<string:planet_id>', methods=['GET'])
+def get_planet(planet_id):
+    plant = Planet.query.get(planet_id)
+    if plant is None:
+        abort(404)
+    return jsonify(plant.serialize())
+
+#Post
+
+@app.route('/favorite/planet/<int:planet_id>', methods=['POST'])
+def post_fav_planet(planet_id):
+    fav = planet_id
+    favorite = Fav_Planet(
+        user_id = request.json["user_id"],
+        planet_id= fav
+    ) 
+    db.session.add(favorite)
+    db.session.commit()
+    
+    return jsonify(favorite.serialize()), 200
+
+
+
+@app.route('/favorite/people/<int:characeteres_id>', methods=['POST'])
+def post_fav_people(characeteres_id):
+    fav = characeteres_id
+    favorite = Fav_People(
+        user_id = request.json["user_id"],
+        characeteres_id= fav
+    ) 
+    db.session.add(favorite)
+    db.session.commit()
+
+    return jsonify(favorite.serialize()), 200
+
+#delete
+
+@app.route('/user/favorites/<int:user_id>/planet/<int:planet_id>', methods=['DELETE'])
+def delete_favorite_planet(user_id, planet_id):
+    favorite = Fav_Planet.query.filter_by(user_id=user_id, planet_id=planet_id).first()
+    if favorite is None:
+        return jsonify({'error': 'Favorite planet not found for the user'}), 404
+
+    db.session.delete(favorite)
+    db.session.commit()
+
+    return jsonify({'message': 'Favorite planet deleted successfully'})
+
+@app.route('/user/favorites/<int:user_id>/people/<int:characeteres_id>', methods=['DELETE'])
+def delete_favorite_people(user_id, characeteres_id):
+    favorite = Fav_People.query.filter_by(user_id=user_id, characeteres_id=characeteres_id).first()
+    if favorite is None:
+        return jsonify({'error': 'Favorite planet not found for the user'}), 404
+
+    db.session.delete(favorite)
+    db.session.commit()
+
+    return jsonify({'message': 'Favorite planet deleted successfully'})
+
+
+@app.route('/user/<string:user_id>', methods = ['DELETE'])
+def delete_user(user_id):
+    delUSer = User.query.get(user_id)
+    db.session.delete(delUSer)
+    db.session.commit()
+    return jsonify({'result': 'success'})
+
+@app.route('/planet/<string:planet_id>', methods = ['DELETE'])
+def delete_planet(planet_id):
+    delPlanet = Planet.query.get(planet_id)
+    db.session.delete(delPlanet)
+    db.session.commit()
+    return jsonify({'result': 'success'})
+
+@app.route('/people/<string:people_id>', methods = ['DELETE'])
+def delete_people(people_id):
+    delPleople = People.query.get(people_id)
+    db.session.delete(delPleople)
+    db.session.commit()
+    return jsonify({'result': 'success'})
 
 # this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
